@@ -197,11 +197,11 @@ if __name__ == '__main__':
            logging.debug('msg: %s', line.rstrip())
            config['message'] = line.rstrip()
 
-       # ignore msgs that match to regex
-       if re.search(r'.*requesting.*', line):
-           continue
-       else:
-           client, room = setup(config)
-           send_message(config, room)
-           client.logout()
+           # ignore msgs that match to regex
+           if re.search(r'.*requesting.*', line):
+               continue
+           else:
+               client, room = setup(config)
+               send_message(config, room)
+               client.logout()
 ##END
