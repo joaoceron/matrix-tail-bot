@@ -9,6 +9,7 @@
 #
 # [1] Matrix-Python-SDK: https://github.com/matrix-org/matrix-python-sdk
 # [2] https://github.com/lordievader/matrix-zabbix-bot
+# sand-project.nl - Joao Ceron - ceron@botlog.org
 ###############################################################################
 
 ###############################################################################
