@@ -1,19 +1,10 @@
 #!/usr/bin/env python3
-###############################################################################
-# matrix-bot
-#
-# Description:    monitor a logfile and send messages to the
-#                 configured chat room from Matrix [1].
+"""Author:      Olivier van der Toorn <oliviervdtoorn@gmail.com>
+Description:    Simple wrapper around matrix-python-sdk. Makes sending messages
+                to a Matrix room easy.
 
-# This program is a fork from [1] by Olivier van der Toorn.
-#
-# [1] Matrix-Python-SDK: https://github.com/matrix-org/matrix-python-sdk
-# [2] https://github.com/lordievader/matrix-zabbix-bot
-# sand-project.nl - Joao Ceron - ceron@botlog.org
-###############################################################################
-
-###############################################################################
-### Python modules
+Matrix-Python-SDK: https://github.com/matrix-org/matrix-python-sdk
+"""
 import argparse
 import configparser
 import imp
@@ -22,17 +13,15 @@ import os
 import sys
 from matrix_client.client import MatrixClient
 import datetime
-import time 
-import re
 
-###############################################################################
-### Program settings
-version = 0.2
+class StreamType(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        try:
+            setattr(namespace, self.dest, values.readline().strip())
+        except AttributeError:
+            setattr(namespace, self.dest, values)
 
-###############################################################################
-### Subrotines
 
-#------------------------------------------------------------------------------
 def flags():
     """Parses the arguments given.
 
@@ -51,7 +40,7 @@ def flags():
     parser.add_argument('-p', '--password', type=str, dest='password',
                         help='password to use (overrides the config)')
     parser.add_argument('-c', '--config', type=str, dest='config',
-                        default='testbed-bot.conf',
+                        default='/etc/zabbix-bot.conf',
                         help=('specifies the config file '
                               '(defaults to /etc/matrix.conf)'))
     parser.add_argument('-t', '--type', type=str, dest='message_type',
@@ -62,7 +51,6 @@ def flags():
     return vars(parser.parse_args())
 
 
-#------------------------------------------------------------------------------
 def read_config(config_file, conf_section='Matrix'):
     """Reads a matrix config file.
 
@@ -83,7 +71,6 @@ def read_config(config_file, conf_section='Matrix'):
     return {key: value for key, value in config[conf_section].items()}
 
 
-#------------------------------------------------------------------------------
 def merge_config(args, config):
     """This function merges the args and the config together.
     The command line arguments are prioritized over the configured values.
@@ -104,7 +91,6 @@ def merge_config(args, config):
     return config
 
 
-#------------------------------------------------------------------------------
 def setup(config):
     """Sets up the Matrix client. Makes sure the (specified) room is joined.
     """
@@ -128,7 +114,6 @@ def setup(config):
     return client, room
 
 
-#------------------------------------------------------------------------------
 def send_message(config, room):
     """Sends a message into the room. The config dictionary hold the message.
 
@@ -144,7 +129,6 @@ def send_message(config, room):
     room.send_html(formatted_message, msgtype=config['message_type'])
 
 
-#------------------------------------------------------------------------------
 def set_log_level(level=None):
     """Sets the log level of the notebook. Per default this is 'INFO' but
     can be changed.
@@ -156,10 +140,6 @@ def set_log_level(level=None):
     logging.basicConfig(format='%(asctime)s: %(levelname)8s - %(message)s',
                         level=level)
 
-###############################################################################
-### Main Process
-
-##BEGIN
 
 if __name__ == '__main__':
 
@@ -167,42 +147,36 @@ if __name__ == '__main__':
     if args['debug'] is True:
         set_log_level('DEBUG')
         print (args)
+
     else:
         set_log_level()
 
-    # read configuration file
+    message_to_send = []
+    # message from the cmd line
+    if (args['message']):
+        message_to_send.append(args['message'])
+        
+    elif not sys.stdin.isatty():
+        message_to_send = sys.stdin.readlines()
+        sys.stdin = open('/dev/tty')
+    else:
+        print ("you should provide a message to be sent. Either from stdin or cli.")
+       
     try:
         config = merge_config(args, read_config(args['config']))
-        config['logfile'] = config['logfile'].replace("\"","")
-        logging.debug('config: %s', config)
 
     except FileNotFoundError:
         config = args
         if None in [config['username'], config['password'], config['room']]:
             raise
+   
+    logging.debug('config: %s', config)
+    client, room = setup(config)
 
-    # check file to 'tail'
-    if not (os.path.exists(config['logfile'])):
-        print ("File {} cannot be found!".format(config['logfile']))
+    # send message
+    for line in message_to_send:
+       config['message'] = line.rstrip()
+       send_message(config, room)
 
-    f = open(config['logfile'],'r')
-    if not f:
-        print ("File {} cannot be read!".format(config['logfile']))
-
-    # tail process
-    while True:
-       line = f.readline()
-       if not line:
-           time.sleep(10)
-       else:
-           logging.debug('msg: %s', line.rstrip())
-           config['message'] = line.rstrip()
-
-           # ignore msgs that match to regex
-           if re.search(r'.*requesting.*', line):
-               continue
-           else:
-               client, room = setup(config)
-               send_message(config, room)
-               client.logout()
-##END
+    if 'token' not in config:
+        client.logout()
